@@ -6,7 +6,7 @@
 #include <SPI.h>
 #include <WiFi101.h>
 #include <FlashStorage.h>
-#include "config.h"
+//#include "config.h" <- in this file you should define user and password of the influx db. Ask Marcel to get one.
 
 // feather m0 config
 #define en A0
@@ -291,7 +291,7 @@ char* get_api_key() {
 
 void send_to_influx() {
   data = "";
-  digitalWrite(en, HIGH);  
+  digitalWrite(en, HIGH);
   delay(10000);
     // read the value from the sensor:
   digitalWrite(pre, 1);
@@ -339,7 +339,7 @@ void send_to_influx() {
   Serial.println();
   Serial.println("closing connection");
   digitalWrite(pre, 0);
-  delay(60000*15); 
+  delay(60000*15);
 }
 
 void check_pingable() {
