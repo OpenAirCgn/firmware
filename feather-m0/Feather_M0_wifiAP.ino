@@ -6,7 +6,30 @@
 #include <SPI.h>
 #include <WiFi101.h>
 #include <FlashStorage.h>
-//#include "config.h" <- in this file you should define user and password of the influx db. Ask Marcel to get one.
+#include "config.h" // <- in this file you should define user and password of the influx db. Ask Marcel to get one.
+
+/***************************************************************************
+  This is a library for the BME280 humidity, temperature & pressure sensor
+
+  Designed specifically to work with the Adafruit BME280 Breakout
+  ----> http://www.adafruit.com/products/2650
+
+  These sensors use I2C or SPI to communicate, 2 or 4 pins are required
+  to interface.
+
+  Adafruit invests time and resources providing this open source code,
+  please support Adafruit andopen-source hardware by purchasing products
+  from Adafruit!
+
+  Written by Limor Fried & Kevin Townsend for Adafruit Industries.
+  BSD license, all text above must be included in any redistribution
+ ***************************************************************************/
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
+
+#define SEALEVELPRESSURE_HPA (1024)   // generic
+Adafruit_BME280 bme; // I2C
 
 // feather m0 config
 #define en A0
@@ -16,6 +39,11 @@
 #define in_type INPUT
 int resolution = 1023; // resolution steps of the ADC
 
+// BME 280 config - Sensor breakout is connected to SDA,SCL,5,6 digital I/O pins are switched to GND and VCC
+#define bme_gnd 5
+#define bme_vcc 6
+#define bme_i2c_addr 0x76
+boolean bme_present = false;
 
 // ap storage config
 typedef struct {
@@ -45,8 +73,8 @@ WiFiServer server(80);
 const int port = 80;
 const char* host = "influx.datacolonia.de";
 String data = "";
-char board[3];
-char api_key[6];
+char board[6];
+char api_key[12];
 bool ap_connectable = false;
 bool ap_created = false;
 
@@ -80,21 +108,51 @@ void setup() {
   //while (!Serial) {
   //  ; // wait for serial port to connect. Needed for native USB port only
   //}
-  WiFi.setPins(8,7,4,2);
+  WiFi.setPins(8, 7, 4, 2);
   WiFi.maxLowPowerMode(); // go into power save mode
   //sensor:
   pinMode(pre, OUTPUT);
   pinMode(en, OUTPUT);
+  // bme280 sensor
+  pinMode(bme_gnd, OUTPUT);
+  pinMode(bme_vcc, OUTPUT);
+  digitalWrite(bme_gnd, LOW);
+  digitalWrite(bme_vcc, HIGH);
   // Read the content of "my_ap" into the "owner" variable
   owner = my_ap.read();
   Serial.println(owner.ssid_ap);
 
   if (owner.valid) {
     connect_ap();
-  }else{
+  } else {
     create_ap();
   }
-}
+  if (!bme.begin(bme_i2c_addr)) {
+    Serial.println("Could not find a valid BME280 sensor, check wiring!");
+    bme_present = false;
+  }
+  else {
+    Serial.println("Found BME280 sensor, OK");
+    delay(1000);   // wait for vcc stability
+    bme_present = true;
+    // take 2 measurements to empty buffer
+    for (int i = 0; i < 2; i++) {
+      Serial.print("Temperature = ");
+      Serial.print(bme.readTemperature());
+      Serial.println(" *C");
+      Serial.print("Pressure = ");
+      Serial.print(bme.readPressure() / 100.0F);
+      Serial.println(" hPa");
+      Serial.print("Approx. Altitude = ");
+      Serial.print(bme.readAltitude(SEALEVELPRESSURE_HPA));
+      Serial.println(" m");
+      Serial.print("Humidity = ");
+      Serial.print(bme.readHumidity());
+      Serial.println(" %");
+      Serial.println();
+    }
+  }
+}  // end of setup
 
 void create_ap() {
   Serial.println("Access Point Web Server");
@@ -111,7 +169,7 @@ void create_ap() {
   Serial.print("Creating access point named: ");
   byte mac[6];
   WiFi.macAddress(mac);
-  sprintf(ssid, "%02X%02X%02X%02X%02X%02X",mac[5], mac[4], mac[3], mac[2], mac[1], mac[0]);
+  sprintf(ssid, "%02X%02X%02X%02X%02X%02X", mac[5], mac[4], mac[3], mac[2], mac[1], mac[0]);
   Serial.println(ssid);
 
   // Create open network. Change this line if you want to create an WEP network:
@@ -134,7 +192,7 @@ void create_ap() {
 }
 
 void get_new_ssid() {
- // compare the previous status to the current status
+  // compare the previous status to the current status
   if (status != WiFi.status()) {
     // it has changed update the variable
     status = WiFi.status();
@@ -190,13 +248,13 @@ void get_new_ssid() {
         // Check to see if the client request was "GET /H" or "GET /L":
         if (currentLine.startsWith("GET /setting")) {
           if (currentLine.endsWith(" HTTP")) {
-            String s=currentLine;
+            String s = currentLine;
             int firstIndex = s.indexOf("ssid=");
-            int secondIndex = s.indexOf('&', firstIndex+1);
-            int thirdIndex = s.indexOf("pass=", secondIndex+1);
-            int endIndex = s.indexOf(" HTTP", thirdIndex+1);
-            ssid_ap = escapeParameter(s.substring(firstIndex+5, secondIndex));
-            pass_ap = escapeParameter(s.substring(thirdIndex+5, endIndex)); // To the end of the string
+            int secondIndex = s.indexOf('&', firstIndex + 1);
+            int thirdIndex = s.indexOf("pass=", secondIndex + 1);
+            int endIndex = s.indexOf(" HTTP", thirdIndex + 1);
+            ssid_ap = escapeParameter(s.substring(firstIndex + 5, secondIndex));
+            pass_ap = escapeParameter(s.substring(thirdIndex + 5, endIndex)); // To the end of the string
             Serial.println("params:");
             Serial.println(ssid_ap);
 
@@ -269,7 +327,7 @@ void connect_ap() {
     ap_connectable = false;
     WiFi.end();
     create_ap();
-  }else {
+  } else {
     ap_connectable = true;
     check_pingable();
   }
@@ -285,34 +343,67 @@ char* get_board() {
 char* get_api_key() {
   byte mac[6];
   WiFi.macAddress(mac);
-  sprintf(api_key, "%02X%02X%02X%02X%02X%02X",mac[5], mac[4], mac[3], mac[2], mac[1], mac[0]);
+  sprintf(api_key, "%02X%02X%02X%02X%02X%02X", mac[5], mac[4], mac[3], mac[2], mac[1], mac[0]);
   return api_key;
 }
 
 void send_to_influx() {
+  float bme_temp, bme_hum, bme_press;
+  if (!bme.begin(bme_i2c_addr)) {   // seems the sensor need re-initialization ?
+    Serial.println("Could not find a valid BME280 sensor, check wiring!");
+  }
+  else {
+    Serial.println("Found BME280 sensor, OK");
+  }
   data = "";
+  if (bme_present) {
+    Serial.print("preHeat\t");
+    bme_temp = get_bme_temp();
+    Serial.print(bme_temp);
+    Serial.print(" °C\t");
+    bme_hum = get_bme_hum();
+    Serial.print(bme_hum);
+    Serial.print(" %\t");
+    bme_press = get_bme_press();
+    Serial.print(bme_press);
+    Serial.println(" mBar");
+  }
   digitalWrite(en, HIGH);
   delay(10000);
-    // read the value from the sensor:
+  // read the value from the sensor:
   digitalWrite(pre, 1);
   delay(30000);
+  if (bme_present) {
+    Serial.print("postHeat\t");
+    Serial.print(get_bme_temp());
+    Serial.print(" °C\t");
+    Serial.print(get_bme_hum());
+    Serial.print(" %\t");
+    Serial.print(get_bme_press());
+    Serial.println(" mBar");
+  }
   Serial.println(get_ox_resistane());
   Serial.println(get_co_resistane());
-   // influxDB data format: key,tag_key=param field=param
-  data+="r_no,id="+String(get_board())+",mac="+String(get_api_key())+" value="+String(r_ox)+" \n";
-  data+="sens_no,id="+String(get_board())+",mac="+String(get_api_key())+" value="+String(a_ox)+" \n";
-  data+="r_co,id="+String(get_board())+",mac="+String(get_api_key())+" value="+String(r_co)+" \n";
-  data+="sens_co,id="+String(get_board())+",mac="+String(get_api_key())+" value="+String(a_co)+" \n";
+  // influxDB data format: key,tag_key=param field=param
+  data += "r_no,id=" + String(get_board()) + ",mac=" + String(get_api_key()) + " value=" + String(r_ox) + " \n";
+  data += "sens_no,id=" + String(get_board()) + ",mac=" + String(get_api_key()) + " value=" + String(a_ox) + " \n";
+  data += "r_co,id=" + String(get_board()) + ",mac=" + String(get_api_key()) + " value=" + String(r_co) + " \n";
+  data += "sens_co,id=" + String(get_board()) + ",mac=" + String(get_api_key()) + " value=" + String(a_co) + " \n";
+  if (bme_present) {
+    data += "bme_t,id=" + String(get_board()) + ",mac=" + String(get_api_key()) + " value=" + String(bme_temp) + " \n";
+    data += "bme_h,id=" + String(get_board()) + ",mac=" + String(get_api_key()) + " value=" + String(bme_hum) + " \n";
+    data += "bme_p,id=" + String(get_board()) + ",mac=" + String(get_api_key()) + " value=" + String(bme_press) + " \n";
+  }
 
   Serial.println(data);
   if (!influx_client.connect(host, port)) {
     Serial.println("connection failed");
     return;
   }
- // send request to the server
-  influx_client.print(String("POST ") + "/write?db=open_air&u="+String(USER)+"&p="+String(PASS)+ " HTTP/1.1\r\n" +
-        "Host: " + host + "\r\n" +
-        "Content-Type: application/x-www-form-urlencoded\r\n");
+  // send request to the server
+  influx_client.print(String("POST ") + "/write?db=open_air&u=" + String(USER) + "&p=" + String(PASS) + " HTTP/1.1\r\n" +
+                      "Host: " + host + "\r\n" +
+                      "Content-Type: application/x-www-form-urlencoded\r\n");
   influx_client.print("Content-Length: ");
   influx_client.println(data.length(), DEC);
   influx_client.println("Connection: close\r\n");
@@ -331,7 +422,7 @@ void send_to_influx() {
   }
 
   // Read all the lines of the reply from server and print them to Serial
-  while(influx_client.available()){
+  while (influx_client.available()) {
     String line = influx_client.readStringUntil('\r');
     Serial.print(line);
   }
@@ -339,13 +430,13 @@ void send_to_influx() {
   Serial.println();
   Serial.println("closing connection");
   digitalWrite(pre, 0);
-  delay(60000*15);
+  delay(60000 * 15);
 }
 
 void check_pingable() {
   int pingResult = WiFi.ping(host);
 
-  if (pingResult == WL_PING_SUCCESS) {
+  if (pingResult >= 0) {
     Serial.println("SUCCESS!");
     pingable = true;
   } else {
@@ -359,16 +450,29 @@ void check_pingable() {
 float get_ox_resistane() {
   a_ox = analogRead(vnox);
   vout_ox = (board_volt / resolution) * a_ox; // Calculates the Voltage
-  r_ox = ((board_volt - vout_ox) * r5)/vout_ox; // Calculates the resistance
-  return isnan(r_ox)?-1:r_ox;
+  r_ox = ((board_volt - vout_ox) * r5) / vout_ox; // Calculates the resistance
+  return isnan(r_ox) ? -1 : r_ox;
 }
 
 float get_co_resistane() {
   a_co = analogRead(vred);
   vout_co = (board_volt / resolution) * a_co; // Calculates the Voltage
-  r_co = ((board_volt - vout_co) * r7)/vout_co; // Calculates the resistance
-  return isnan(r_co)?-1:r_co;
+  r_co = ((board_volt - vout_co) * r7) / vout_co; // Calculates the resistance
+  return isnan(r_co) ? -1 : r_co;
 }
+
+float get_bme_temp() {
+  return bme.readTemperature();
+}
+
+float get_bme_hum() {
+  return bme.readHumidity();
+}
+
+float get_bme_press() {
+  return (bme.readPressure() / 100.0F);
+}
+
 String escapeParameter(String param) {
   param.replace("+", " ");
   param.replace("%21", "!");
@@ -393,12 +497,13 @@ String escapeParameter(String param) {
   return param;
 }
 void loop() {
- if (pingable) {
-   send_to_influx();
- } else {
-   if ((ap_connectable == false) && (ap_created == true)) {
-     get_new_ssid();
-   }
- }
+  if (pingable) {
+    send_to_influx();
+  } else {
+    if ((ap_connectable == false) && (ap_created == true)) {
+      get_new_ssid();
+    }
+  }
 
 }
+
