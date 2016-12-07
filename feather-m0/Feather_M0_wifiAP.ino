@@ -125,7 +125,12 @@ void setup() {
   if (owner.valid) {
     connect_ap();
   } else {
-    create_ap();
+    search_connect_freifunk();
+    
+    // the above did not work
+    if (ap_connectable == false){
+      create_ap;
+    }
   }
   if (!bme.begin(bme_i2c_addr)) {
     Serial.println("Could not find a valid BME280 sensor, check wiring!");
@@ -171,7 +176,7 @@ void create_ap() {
   WiFi.macAddress(mac);
   sprintf(ssid, "%02X%02X%02X%02X%02X%02X", mac[5], mac[4], mac[3], mac[2], mac[1], mac[0]);
   Serial.println(ssid);
-
+  
   // Create open network. Change this line if you want to create an WEP network:
   status = WiFi.beginAP(ssid);
   if (status != WL_AP_LISTENING) {
@@ -307,6 +312,47 @@ void printWifiStatus() {
   Serial.print(rssi);
   Serial.println(" dBm");
   Serial.println(ip);
+
+
+}
+
+void search_connect_freifunk() {
+  String myssid;
+  int attempts = 0;
+  // scan for nearby networks:
+  Serial.println("** Scan Networks **");
+  byte numSsid = WiFi.scanNetworks();
+
+  // print the list of networks seen:
+  Serial.print("number of available networks:");
+  Serial.println(numSsid);
+
+  // print the network number and name for each network found:
+  for (int thisNet = 0; thisNet < numSsid; thisNet++) {
+    myssid = WiFi.SSID(thisNet);
+    if ( myssid == "kbu.freifunk.net" ) {
+      Serial.print("Freifunk SSID: ");
+      Serial.print(FREIFUNKSSID);
+      Serial.println(" found!");
+       while ( (status != WL_CONNECTED) && (attempts < 5) ) {
+        Serial.println("Attempting to connect...");
+        status = WiFi.begin(myssid);
+        attempts += 1;
+        // wait 5 seconds for connection:
+        delay(5000);
+      }
+      printWifiStatus();
+      //
+      if (attempts > 4) {
+        ap_connectable = false;
+        WiFi.end();
+        create_ap();
+      } else {
+        ap_connectable = true;
+        check_pingable();
+      }
+    }
+  }
 }
 
 void connect_ap() {
