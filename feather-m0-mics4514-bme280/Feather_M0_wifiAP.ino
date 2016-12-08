@@ -127,7 +127,7 @@ void setup() {
     connect_ap();
   } else {
     search_connect_freifunk();
-    
+
     // the above did not work
     if (ap_connectable == false){
       create_ap;
@@ -546,6 +546,7 @@ String escapeParameter(String param) {
 void loop() {
   if (pingable) {
     send_to_influx();
+    WiFi.maxLowPowerMode(); // go into power save mode
   } else {
     if ((ap_connectable == false) && (ap_created == true)) {
       get_new_ssid();

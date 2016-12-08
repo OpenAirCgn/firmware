@@ -30,11 +30,11 @@ FlashStorage(my_ap, ap);
 ap owner;
 
 // local ap config
-char ssid[] = "isGenerated";     // created AP name
-char pass[] = "1234567890";      // AP password (needed only for WEP, must be exactly 10 or 26 characters in length)
+char ssid[] = "isGenerated"; // created AP name
+char pass[] = "1234567890"; // AP password (needed only for WEP, must be exactly 10 or 26 characters in length)
 String ssid_ap;
 String pass_ap;
-int keyIndex = 0;                // your network key Index number (needed only for WEP)
+int keyIndex = 0; // your network key Index number (needed only for WEP)
 
 int status = WL_IDLE_STATUS;
 WiFiServer server(80);
@@ -363,33 +363,33 @@ String escapeParameter(String param) {
 }
 
 void loop() {
- if (pingable) {
-  data[0] = (char)0;
-  digitalWrite(en, HIGH);
-  delay(10000);
+  if (pingable) {
+    data[0] = (char)0;
+    digitalWrite(en, HIGH);
+    delay(10000);
     // read the value from the sensor:
-  digitalWrite(pre, 1);
-  delay(30000);
-  Serial.println(get_ox_resistance());
-  Serial.println(get_co_resistance());
-  digitalWrite(pre, 0);
-   // influxDB data format: key,tag_key=param field=param
-  snprintf(data, sizeof data,
-    "r_no,id=%s,mac=%s value=%.2f \n"
-    "sens_no,id=%s,mac=%s value=%d \n"
-    "r_co,id=%s,mac=%s value=%.2f \n"
-    "sens_co,id=%s,mac=%s value=%d \n",
-    get_board(), get_api_key(), r_ox,
-    get_board(), get_api_key(), a_ox,
-    get_board(), get_api_key(), r_co,
-    get_board(), get_api_key(), a_co);
+    digitalWrite(pre, 1);
+    delay(30000);
+    Serial.println(get_ox_resistance());
+    Serial.println(get_co_resistance());
+    digitalWrite(pre, 0);
+    // influxDB data format: key,tag_key=param field=param
+    snprintf(data, sizeof data,
+      "r_no,id=%s,mac=%s value=%.2f \n"
+      "sens_no,id=%s,mac=%s value=%d \n"
+      "r_co,id=%s,mac=%s value=%.2f \n"
+      "sens_co,id=%s,mac=%s value=%d \n",
+      get_board(), get_api_key(), r_ox,
+      get_board(), get_api_key(), a_ox,
+      get_board(), get_api_key(), r_co,
+      get_board(), get_api_key(), a_co);
 
-   send_to_influx();
-   delay(60000*15);
- } else {
-   if ((ap_connectable == false) && (ap_created == true)) {
-     get_new_ssid();
-   }
- }
-
+    send_to_influx();
+    WiFi.maxLowPowerMode(); // go into power save mode
+    delay(60000*15);
+  } else {
+    if ((ap_connectable == false) && (ap_created == true)) {
+      get_new_ssid();
+    }
+  }
 }
