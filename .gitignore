@@ -1,2 +1,4 @@
 *.swp
-/feather-m0/config.h
+/feather-m0-mics4514-bme280/config.h
+/feather-m0-mics4514/config.h
+/feather-wiced-mics4514/config.h

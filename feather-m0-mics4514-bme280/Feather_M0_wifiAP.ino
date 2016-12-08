@@ -1,6 +1,7 @@
 /*
   Library for NO2 and CO Sensor reading.
   Created by Marcel Belledin, October 27, 2016.
+  Modified by Reinhard Nickels with bme280 sensor
 */
 
 #include <SPI.h>
@@ -59,10 +60,10 @@ ap owner;
 
 // local ap config
 char ssid[] = "isGenerated"; // created AP name
-char pass[] = "1234567890";      // AP password (needed only for WEP, must be exactly 10 or 26 characters in length)
+char pass[] = "1234567890"; // AP password (needed only for WEP, must be exactly 10 or 26 characters in length)
 String ssid_ap;
 String pass_ap;
-int keyIndex = 0;                // your network key Index number (needed only for WEP)
+int keyIndex = 0; // your network key Index number (needed only for WEP)
 
 int status = WL_IDLE_STATUS;
 WiFiServer server(80);
