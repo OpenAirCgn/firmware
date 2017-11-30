@@ -1,0 +1,3 @@
+#define PASS "F8F005F686DA"
+#define USER "F686DA"
+
