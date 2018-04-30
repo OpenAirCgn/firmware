@@ -8,7 +8,7 @@
 //config Dust Sensor
 HardwareSerial Serial2(2);
 SDS011 sds(Serial2);
-float pm25, pm10; 
+float pm25, pm10;
 
 // LEDs
 #define led_red 4
@@ -70,7 +70,7 @@ void setup()   {
   delay(2000);
   pinMode(led_red, OUTPUT);
   pinMode(led_green, OUTPUT);
-  
+
   //deleteApSettings();
   WiFi.disconnect(true);
   WiFi.onEvent(WiFiEvent);
@@ -140,6 +140,9 @@ void loop()
       delay(1);
       digitalWrite(led_red, LOW);
     }
+    if (currentMillis - lastRead > 60*60000) {
+      ESP.restart();
+    }
   }
 }
 
@@ -166,16 +169,18 @@ void wifiConnectedLoop() {
     previousMillis = currentMillis;
     turnSensorsOn();
   }
- 
+
   if (currentMillis - lastMsg > 60000) {
     lastMsg = currentMillis;
     sendTempHumAndCo();
-    sendDustAndNo();      
+    sendDustAndNo();
   }
   if (currentMillis - lastRestart > 20*60*60000) {
+    digitalWrite(preheat, LOW);
+    digitalWrite(enable, LOW);
     ESP.restart(); // remove if openairnode works longer...
   }
-  
+
 }
 
 
@@ -325,21 +330,21 @@ void wifiDisconnectedLoop()
             preferences.begin("wifi", false); // Note: Namespace name is limited to 15 chars
             Serial.println("Writing new ssid");
             preferences.putString("ssid", ssid_ap);
-  
+
             Serial.println("Writing new pass");
             preferences.putString("password", pass_ap);
             delay(300);
             preferences.end();
+            if ((mqtt_id.length() > 0) && (mqtt_pass.length() > 0)) {
+              preferences.begin("mqtt", false); // Note: Namespace name is limited to 15 chars
+              Serial.println("Writing new id");
+              preferences.putString("id", mqtt_id);
 
-            preferences.begin("mqtt", false); // Note: Namespace name is limited to 15 chars
-            Serial.println("Writing new id");
-            preferences.putString("id", mqtt_id);
-  
-            Serial.println("Writing new pass");
-            preferences.putString("pass", mqtt_pass);
-            delay(300);
-            preferences.end();
- 
+              Serial.println("Writing new pass");
+              preferences.putString("pass", mqtt_pass);
+              delay(300);
+              preferences.end();
+            }
             delay(5000);
             ESP.restart();
           }
@@ -375,7 +380,7 @@ void mqttconnect() {
 
 void readTempHumAndCo() {
     unsigned int data[2];
-  
+
     // Start I2C transmission
     Wire.beginTransmission(Addr);
     // Send humidity measurement command, NO HOLD MASTER
@@ -383,10 +388,10 @@ void readTempHumAndCo() {
     // Stop I2C transmission
     Wire.endTransmission();
     delay(500);
-  
+
     // Request 2 bytes of data
     Wire.requestFrom(Addr, 2);
-  
+
     // Read 2 bytes of data
     // humidity msb, humidity lsb
     if (Wire.available() == 2)
@@ -394,11 +399,11 @@ void readTempHumAndCo() {
       data[0] = Wire.read();
       data[1] = Wire.read();
     }
-  
+
     // Convert the data
     humidity  = ((data[0] * 256.0) + data[1]);
     humidity = ((125 * humidity) / 65536.0) - 6;
-  
+
     // Start I2C transmission
     Wire.beginTransmission(Addr);
     // Send temperature measurement command, NO HOLD MASTER
@@ -406,10 +411,10 @@ void readTempHumAndCo() {
     // Stop I2C transmission
     Wire.endTransmission();
     delay(500);
-  
+
     // Request 2 bytes of data
     Wire.requestFrom(Addr, 2);
-  
+
     // Read 2 bytes of data
     // temp msb, temp lsb
     if (Wire.available() == 2)
@@ -417,11 +422,11 @@ void readTempHumAndCo() {
       data[0] = Wire.read();
       data[1] = Wire.read();
     }
-  
+
     // Convert the data
     float temp  = ((data[0] * 256.0) + data[1]);
     ctemp = (((175.72 * temp) / 65536.0) - 46.85) - correction;
-  
+
     // Output data to serial monitor
     Serial.print("Relative humidity : ");
     Serial.print(humidity);
@@ -436,7 +441,7 @@ void readTempHumAndCo() {
 
 
 void sendTempHumAndCo() {
-  if (wifi_connected) {  
+  if (wifi_connected) {
     if (!client.connected()) {
       mqttconnect();
     }
@@ -460,7 +465,7 @@ void sendDustAndNo() {
     snprintf (msg, 250,"{\"pm10\": \"%.2f\",\"pm25\": \"%.2f\",\"rssi\": \"%i\",\"r1\": \"%i\" }",pm10, pm25, rssi, a_no);
     Serial.println(msg);
     Serial.println(data_topic);
-    client.publish(data_topic.c_str(), msg); 
+    client.publish(data_topic.c_str(), msg);
     pm10 = 0;
     pm25 = 0;
     a_no = 0;
@@ -524,5 +529,4 @@ void deleteApSettings() {
   delay(300);
   preferences.end();
 }
-
 
