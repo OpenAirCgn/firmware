@@ -140,7 +140,7 @@ void loop()
       delay(1);
       digitalWrite(led_red, LOW);
     }
-    if (currentMillis - lastRead > 60*60000) {
+    if (currentMillis - lastRestart > 60*60000) {
       ESP.restart();
     }
   }
